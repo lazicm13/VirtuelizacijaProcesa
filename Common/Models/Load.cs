@@ -20,11 +20,18 @@ namespace Common
         private double SquaredDeviation;
         private string ForecastFileId;
         private string MeasuredFileId;
+
+        private static int rowsCounter = 0;
+
+        public static Dictionary<string, Load> loadedObjects = new Dictionary<string, Load>(); // recnik koji pamti dodate Load objekte
+        public static List<string> loadedTimestamp = new List<string>(); // pamtimo timestamp za koji smo dodali Load objekat
+                                                                        // mogli smo sve da izvlacimo iz 1 ali nam je ovako laksa provera?
+
         #endregion
 
         #region Properties
         [DataMember]
-        public int ID { get=>Id; set=> Id = value; }
+        public int ID { get => Id; set => Id = value; }
         [DataMember]
         public string TIMESTAMP { get => Timestamp; set => Timestamp = value; }
         [DataMember]
@@ -77,17 +84,23 @@ namespace Common
         #endregion
 
         #region Methods
-        public static Dictionary<int, Load> LoadMeasuredDataFromCSV(string filePathMeasured)
+        public static Dictionary<string, Load> LoadMeasuredDataFromCSV(string filePathMeasured)
         {
-            Dictionary<int, Load> measuredValue = new Dictionary<int, Load>();
+            Dictionary<string, Load> measuredValue = new Dictionary<string, Load>();
 
+            rowsCounter = 0;
             using (var reader = new StreamReader(filePathMeasured))
             {
-                reader.ReadLine();
+            //    if (reader.ReadLine().Contains("TIME_STAMP")) /// u koliko prvi red sadrzi imena kolona preskoci ga
+            //    { NE RAD NE ZNAM ZASTO
+                    reader.ReadLine();
+             //   }
                 int rowNum = 0;
 
                 while (!reader.EndOfStream)
                 {
+                    rowsCounter++;
+                    
                     var line = reader.ReadLine();
                     var values = line.Split(',');
                     rowNum++;
@@ -97,64 +110,99 @@ namespace Common
                         TIMESTAMP = values[0],
                         MEASURED_VALUE = Convert.ToDouble(values[1])
                     };
+                                                                /// Poslednji pasus u tacki 1
+                    if (!loadedTimestamp.Contains(values[0]))   /// Ako u recniku nemamo objekat napravi ga, u suprotnom ga azuriraj                                                    
+                    {                                           /// Fali deo dodavanja u bazu podataka
+                        loadedObjects.Add(obj.TIMESTAMP, obj);
+                        loadedTimestamp.Add(obj.TIMESTAMP);
+                    }
+                    else
+                    {
+                        loadedObjects[values[0]] = obj;
+                    }
+                    measuredValue.Add(obj.TIMESTAMP, obj);
 
-                    measuredValue.Add(obj.ID, obj);
-
-                    
                 }
-            } 
+                if (rowsCounter < 23 || rowsCounter > 25)
+                {
+                    /// Osnovna provera treba dodati jos za bazu i sta vec fali
+                    Console.WriteLine("Ova datoteka nije validna RN" + rowsCounter);
+                    measuredValue.Clear();
+                }
+            }
 
             return measuredValue;
         }
-        public static Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast)
+        public static Dictionary<string, Load> LoadForecastDataFromCSV(string filePathForecast)
         {
-            Dictionary<int, Load> forecastValue = new Dictionary<int, Load>();
+            Dictionary<string, Load> forecastValue = new Dictionary<string, Load>();
 
             using (var reader = new StreamReader(filePathForecast))
             {
-                reader.ReadLine();
+            rowsCounter = 0;
+              //  if (reader.ReadLine().Contains("TIME_STAMP")) /// u koliko prvi red sadrzi imena kolona preskoci ga
+             //   {     NE RADI NE ZNAM ZASTO
+                    reader.ReadLine();
+             //   }
 
-
-                while (!reader.EndOfStream)
+                while (reader.EndOfStream)
                 {
+                    rowsCounter++;
                     var line = reader.ReadLine();
                     var values = line.Split(',');
 
                     Load obj = new Load
                     {
-                        TIMESTAMP = values[0] + " " + values[1], // jer ima zarez izmedju
-                        FORECAST_VALUE = Convert.ToDouble(values[2])
+                        TIMESTAMP = values[0], // PREPRAVLJENO JER SU CSV FAJLOVI PREPRAVLJENI
+                        FORECAST_VALUE = Convert.ToDouble(values[1])
                     };
+                    if (!loadedTimestamp.Contains(values[0]))   /// Ako u recniku nemamo objekat napravi ga, u suprotnom ga azuriraj                                                    
+                    {                                           /// Fali deo dodavanja u bazu podataka
+                        loadedObjects.Add(obj.TIMESTAMP, obj);
+                        loadedTimestamp.Add(obj.TIMESTAMP);
+                    }
+                    else
+                    {
+                        loadedObjects[values[0]] = obj;
+                    }
+                    forecastValue.Add(obj.TIMESTAMP, obj); 
 
-                    forecastValue.Add(obj.ID, obj);
-                    
+                }
+                if (rowsCounter < 23 || rowsCounter > 25)
+                {
+                    /// Osnovna provera treba dodati jos za bazu i sta vec fali
+                    Console.WriteLine("Ova datoteka nije validna RN "+ rowsCounter);
+                    forecastValue.Clear();
                 }
             } // Nakon ovog bloka, metoda Dispose() će biti automatski pozvana na objektu reader
 
             return forecastValue;
         }
 
-        public static Dictionary<int, Load> LoadData(string filePathMeasured, string filePathForecast)
+        public static Dictionary<string, Load> LoadData(string filePathMeasured, string filePathForecast)
         {
-            Dictionary<int, Load> loadData = new Dictionary<int, Load>();
-            Dictionary<int, Load> loadForecast = new Dictionary<int, Load>();
+            Dictionary<string, Load> loadData = new Dictionary<string, Load>();
+            Dictionary<string, Load> loadForecast = new Dictionary<string, Load>();
+           
+            loadData = LoadMeasuredDataFromCSV(filePathMeasured); // uzimamo measured value i timestamp. Fali nam forecast value
+            loadForecast = LoadForecastDataFromCSV(filePathForecast); // koji dodajemo odavde
 
-            loadData = LoadMeasuredDataFromCSV(filePathMeasured); //uzimamo measured value i timestamp. Fali nam forecast value
-            loadForecast = LoadForecastDataFromCSV(filePathForecast);
-
-            foreach(Load l in loadData.Values)
-            { 
-                foreach(Load l1 in loadForecast.Values)
+            foreach (Load l in loadData.Values)
+            {
+                foreach (Load l1 in loadForecast.Values)
                 {
-                    if(l1.Timestamp.Trim().Equals(l.Timestamp.Trim()))
+                    if (l1.Timestamp.Trim().Equals(l.Timestamp.Trim()))
                     {
                         l.FORECAST_VALUE = l1.FORECAST_VALUE;
                     }
                 }
             }
-
             return loadData;
         }
+
+
+
+
         #endregion
 
 
