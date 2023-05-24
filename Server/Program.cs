@@ -13,12 +13,12 @@ namespace Server
     {
         static void Main(string[] args)
         {
-            List<Load> loadMeasured = new List<Load>();
+            Dictionary<int, Load> loadMeasured = new Dictionary<int, Load>();
             loadMeasured = Load.LoadData("csv/measured/measured_2023_01_17.csv", "csv/forecast/forecast_2023_01_17.csv");
            
-            for(int i=0;i<loadMeasured.Count;i++)
+            foreach(Load load in loadMeasured.Values)
             {
-                Console.WriteLine(loadMeasured[i].ToString());
+                Console.WriteLine(load.ToString());
             }
 
             Console.ReadLine();

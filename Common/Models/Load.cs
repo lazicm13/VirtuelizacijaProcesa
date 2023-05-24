@@ -12,7 +12,7 @@ namespace Common
     public class Load
     {
         #region Fields
-        private static int Id = 0;
+        private int Id;
         private string Timestamp;
         private double ForecastValue;
         private double MeasuredValue;
@@ -84,23 +84,21 @@ namespace Common
             using (var reader = new StreamReader(filePathMeasured))
             {
                 reader.ReadLine();
-                int rowNum = 0;
+                
 
                 while (!reader.EndOfStream)
                 {
                     var line = reader.ReadLine();
                     var values = line.Split(',');
-                    rowNum++;
-
+                   
+                    
                     Load obj = new Load
-                    {
+                    { 
                         TIMESTAMP = values[0],
                         MEASURED_VALUE = Convert.ToDouble(values[1])
                     };
 
                     measuredValue.Add(obj.ID, obj);
-
-                    
                 }
             } 
 
@@ -114,18 +112,17 @@ namespace Common
             {
                 reader.ReadLine();
 
-
                 while (!reader.EndOfStream)
                 {
                     var line = reader.ReadLine();
                     var values = line.Split(',');
-
                     Load obj = new Load
                     {
-                        TIMESTAMP = values[0] + " " + values[1], // jer ima zarez izmedju
+                        TIMESTAMP = values[0], // jer ima zarez izmedju
                         FORECAST_VALUE = Convert.ToDouble(values[2])
                     };
 
+                    
                     forecastValue.Add(obj.ID, obj);
                     
                 }
