@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.Serialization;
+using System.IO;
 
 namespace Common
 {
@@ -11,7 +12,7 @@ namespace Common
     public class Load
     {
         #region Fields
-        private string Id;
+        private static int Id = 0;
         private string Timestamp;
         private double ForecastValue;
         private double MeasuredValue;
@@ -23,7 +24,7 @@ namespace Common
 
         #region Properties
         [DataMember]
-        public string ID { get=>Id; set=> Id = value; }
+        public int ID { get=>Id; set=> Id = value; }
         [DataMember]
         public string TIMESTAMP { get => Timestamp; set => Timestamp = value; }
         [DataMember]
@@ -44,7 +45,7 @@ namespace Common
 
         #region Constructors
 
-        public Load(string id, string timestamp, double forecastvalue, double measuredvalue, double percentage, double square, string forecastID, string measuredID)
+        public Load(int id, string timestamp, double forecastvalue, double measuredvalue, double percentage, double square, string forecastID, string measuredID)
         {
             this.ID = id;
             this.TIMESTAMP = timestamp;
@@ -55,7 +56,7 @@ namespace Common
             this.FORECAST_FILE_ID = forecastID;
             this.MEASURED_FILE_ID = measuredID;
         }
-        public Load() : this("", "", 0, 0, 0, 0, "", "") { }
+        public Load() : this(0, "", 0, 0, 0, 0, "", "") { }
         #endregion
 
         #region OverrideMethods
@@ -74,5 +75,88 @@ namespace Common
             return base.GetHashCode();
         }
         #endregion
+
+        #region Methods
+        public static Dictionary<int, Load> LoadMeasuredDataFromCSV(string filePathMeasured)
+        {
+            Dictionary<int, Load> measuredValue = new Dictionary<int, Load>();
+
+            using (var reader = new StreamReader(filePathMeasured))
+            {
+                reader.ReadLine();
+                int rowNum = 0;
+
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    var values = line.Split(',');
+                    rowNum++;
+
+                    Load obj = new Load
+                    {
+                        TIMESTAMP = values[0],
+                        MEASURED_VALUE = Convert.ToDouble(values[1])
+                    };
+
+                    measuredValue.Add(obj.ID, obj);
+
+                    
+                }
+            } 
+
+            return measuredValue;
+        }
+        public static Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast)
+        {
+            Dictionary<int, Load> forecastValue = new Dictionary<int, Load>();
+
+            using (var reader = new StreamReader(filePathForecast))
+            {
+                reader.ReadLine();
+
+
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    var values = line.Split(',');
+
+                    Load obj = new Load
+                    {
+                        TIMESTAMP = values[0] + " " + values[1], // jer ima zarez izmedju
+                        FORECAST_VALUE = Convert.ToDouble(values[2])
+                    };
+
+                    forecastValue.Add(obj.ID, obj);
+                    
+                }
+            } // Nakon ovog bloka, metoda Dispose() će biti automatski pozvana na objektu reader
+
+            return forecastValue;
+        }
+
+        public static Dictionary<int, Load> LoadData(string filePathMeasured, string filePathForecast)
+        {
+            Dictionary<int, Load> loadData = new Dictionary<int, Load>();
+            Dictionary<int, Load> loadForecast = new Dictionary<int, Load>();
+
+            loadData = LoadMeasuredDataFromCSV(filePathMeasured); //uzimamo measured value i timestamp. Fali nam forecast value
+            loadForecast = LoadForecastDataFromCSV(filePathForecast);
+
+            foreach(Load l in loadData.Values)
+            { 
+                foreach(Load l1 in loadForecast.Values)
+                {
+                    if(l1.Timestamp.Trim().Equals(l.Timestamp.Trim()))
+                    {
+                        l.FORECAST_VALUE = l1.FORECAST_VALUE;
+                    }
+                }
+            }
+
+            return loadData;
+        }
+        #endregion
+
+
     }
 }
