@@ -11,25 +11,25 @@ namespace Common
     public class ImportedFile
     {
         #region Fields
-        private string Id;
+        private int Id;
         private string FileName;
         #endregion
 
         #region Properties
         [DataMember]
-        public string ID { get => Id; set => Id = value; }
+        public int ID { get => Id; set => Id = value; }
         [DataMember]
         public string FILENAME { get => FileName; set => FileName = value; }
         #endregion
 
         #region Constructors
-        public ImportedFile(string id, string file)
+        public ImportedFile(int id, string file)
         {
             this.ID = id;
             this.FILENAME = file;
         }
 
-        public ImportedFile() : this("", "") { }
+        public ImportedFile() : this(0, "") { }
 
         #endregion
 

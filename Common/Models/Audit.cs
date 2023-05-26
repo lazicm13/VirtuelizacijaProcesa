@@ -13,7 +13,7 @@ namespace Common
     public class Audit
     {
         #region Fields
-        private string Id;
+        private int Id;
         private string Timestamp;
         private MessageType messageType;
         private string Message;
@@ -21,7 +21,7 @@ namespace Common
 
         #region Properties
         [DataMember]
-        public string ID { get => Id; set => Id = value; }
+        public int ID { get => Id; set => Id = value; }
         [DataMember]
         public string TIMESTAMP { get => Timestamp; set => Timestamp = value; }
         [DataMember]
@@ -31,7 +31,7 @@ namespace Common
         #endregion
 
         #region Constructors
-        public Audit(string id, string timestamp, MessageType m, string message)
+        public Audit(int id, string timestamp, MessageType m, string message)
         {
             this.ID = id;
             this.TIMESTAMP = timestamp;
@@ -39,7 +39,7 @@ namespace Common
             this.MESSAGE = message;
         }
 
-        public Audit() : this("", "", 0, "") { }
+        public Audit() : this(0, "", 0, "") { }
         #endregion
 
         #region OverrideMethods
