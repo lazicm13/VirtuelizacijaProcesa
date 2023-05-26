@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.ServiceModel;
 using Common;
 using System.IO;
+using Database;
 
 namespace Server
 {
@@ -19,8 +20,8 @@ namespace Server
             host.Open();
 
             Load load = new Load();
-            Dictionary<string, Load> loadData = new Dictionary<string, Load>();
-            Dictionary<string, Load> loadData1 = new Dictionary<string, Load>();
+            Dictionary<int, Load> loadData = new Dictionary<int, Load>();
+            Dictionary<int, Load> loadData1 = new Dictionary<int, Load>();
 
             
 
@@ -28,13 +29,8 @@ namespace Server
 
             loadData = sl.LoadDataFromCsv("csv/measured/measured_2023_01_23.csv", "csv/forecast/forecast_2023_01_23.csv");
             sl.CalculateDeviation();
-            sl.DatabaseEntry();
-           
-            foreach (Load l in loadData.Values)
-            {    
-                Console.WriteLine(l);
-            }
-
+            sl.LoadDatabaseEntry(loadData.Values.ToList());
+            sl.ImportedFileDatabaseEntry(InMemoryDatabase.importedFiles.Values.ToList());
 
             Console.WriteLine("Pritisnite [Enter] za zaustavljanje servera!");
             Console.ReadLine();
