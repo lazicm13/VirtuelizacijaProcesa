@@ -13,14 +13,13 @@ namespace Common
     {
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        Dictionary<string, Load> LoadMeasuredDataFromCSV(string filePathMeasured);
+        Dictionary<string, Load> LoadDataFromCsv(string filePathMeasured, string filePathForecast);
 
         [OperationContract]
-        [FaultContract(typeof(InvalidFileException))]
-        Dictionary<string, Load> LoadForecastDataFromCSV(string filePathForecast);
+        void DatabaseEntry();
 
         [OperationContract]
-        [FaultContract(typeof(InvalidFileException))]
-        Dictionary<string, Load> LoadData(string filePathMeasured, string filePathForecast);
+        void CalculateDeviation();
+
     }
 }
