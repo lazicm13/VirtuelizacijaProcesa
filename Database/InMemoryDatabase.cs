@@ -11,5 +11,6 @@ namespace Database
     {
         public static Dictionary<int, Load> db = new Dictionary<int, Load>();
         public static Dictionary<int, ImportedFile> importedFiles = new Dictionary<int, ImportedFile>();
+        public static Dictionary<int, Audit> auditFiles = new Dictionary<int, Audit>();
     }
 }

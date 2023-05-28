@@ -17,8 +17,8 @@ namespace Client
 
             ILoad proxy = factory.CreateChannel();
 
-            Console.WriteLine("Unesite naziv datoteke iz koje zelite da iščitate podatke.\nNaziv se sastoji od tipa datoteke i datuma, npr \"prog_2023_01_27.csv\"");
-            Console.WriteLine("Tip datoteke može biti\n\tprog - za prognoziranu potrošnju i \n\tostv - za ostvarenu potrošnju");
+            Console.WriteLine("Unesite naziv datoteke iz koje zelite da iščitate podatke.\nNaziv se sastoji od tipa datoteke i datuma, npr \"forecast_2023_01_27.csv\"");
+            Console.WriteLine("Tip datoteke može biti\n\tforecast - za prognoziranu potrošnju i \n\tmeasured - za ostvarenu potrošnju");
             Console.Write("Unesite naziv datoteke: ");
             string datoteka;
             datoteka = Console.ReadLine().Trim();

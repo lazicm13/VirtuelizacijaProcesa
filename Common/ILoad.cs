@@ -16,20 +16,21 @@ namespace Common
         Dictionary<int, Load> LoadDataFromCsv(string filePathMeasured, string filePathForecast);
 
         [OperationContract]
-        void LoadDatabaseEntry(List<Load> dict);
+        [FaultContract(typeof(InvalidFileException))]
+        void LoadDatabaseEntry(Load load);
        
         
         [OperationContract]
-        void ImportedFileDatabaseEntry(List<ImportedFile> dict);
+        [FaultContract(typeof(InvalidFileException))]
+        void ImportedFileDatabaseEntry(ImportedFile dict);
        
         
         [OperationContract]
+        [FaultContract(typeof(InvalidFileException))]
         void AuditDatabaseEntry(Audit audit);
 
         
         [OperationContract]
-        [FaultContract(typeof(CalculationException))]
-
         Dictionary<int, Load> LoadMeasuredDataFromCSV(string filePathMeasured);
        
         
@@ -38,7 +39,11 @@ namespace Common
         Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast);
 
         [OperationContract]
-        void CalculateDeviation();
+        [FaultContract(typeof(CalculationException))]
+        void CalculateDeviation(Load load);
+
+        [OperationContract]
+        Dictionary<int, Load> ReadXML(string filepath);
 
     }
 }

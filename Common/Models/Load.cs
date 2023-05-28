@@ -26,8 +26,6 @@ namespace Common
         private int ForecastFileId = 0;
         private int MeasuredFileId = 0;
 
-     
-
         #endregion
 
         #region Properties
