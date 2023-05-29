@@ -27,6 +27,9 @@ namespace Server
         public static int importedIDcounter = 0;
         public int errorID { get; set; }
         public int importedID { get; set; }
+        public string receivedMessage;
+
+
 
 
         // Liste za dodelu ID
@@ -61,7 +64,7 @@ namespace Server
                     }
                     else
                     {
-                        if(values.Length > 2)
+                        if (values.Length > 2)
                         {
                             Load obj = new Load
                             {
@@ -96,6 +99,7 @@ namespace Server
             /// Odradjeno je otp proveriti lepo
             if (rowCounter < 23 || rowCounter > 25)
             {
+                Console.WriteLine("NE VALJA");
                 InvalidFileException ex = new InvalidFileException()
                 {
                     Razlog = "Datoteka nije validna"
@@ -104,40 +108,12 @@ namespace Server
                 errorIDcounter++;
                 errorID = errorIDcounter;
                 Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
-                AuditDatabaseEntry(auditFile);
-                // throw new FaultException<InvalidFileException>(ex); // premesteno dole jer se nista iza ovog nece izvrsiti
+                InMemoryDatabase.auditFiles.Add(auditFile.ID, auditFile);
+                 throw new FaultException<InvalidFileException>(ex); // premesteno dole jer se nista iza ovog nece izvrsiti
 
             }
 
             return measuredValue;
-        }
-
-        public Dictionary<int, Load> ReadXML(string filepath)
-        {
-            Dictionary<int, Load> loads = new Dictionary<int, Load>();
-            XmlDocument xmlDoc = new XmlDocument();
-
-            // Učitavanje XML datoteke
-            xmlDoc.Load(filepath);
-
-            // Čitanje vrednosti iz XML datoteke
-            XmlNodeList loadNodes = xmlDoc.SelectNodes("/ArrayOfLoad/Load");
-            foreach (XmlNode loadNode in loadNodes)
-            {
-                int id = Convert.ToInt32(loadNode.SelectSingleNode("ID").InnerText);
-                string timestamp = loadNode.SelectSingleNode("TIMESTAMP").InnerText;
-                double forecastValue = Convert.ToDouble(loadNode.SelectSingleNode("FORECAST_VALUE").InnerText);
-                double measuredValue = Convert.ToDouble(loadNode.SelectSingleNode("MEASURED_VALUE").InnerText);
-                double absDeviation = Convert.ToDouble(loadNode.SelectSingleNode("ABSOLUTE_PERCENTAGE_DEVIATION").InnerText);
-                double squaredDeviation = Convert.ToDouble(loadNode.SelectSingleNode("SQUARED_DEVIATION").InnerText);
-                int forecastFileId = Convert.ToInt32(loadNode.SelectSingleNode("FORECAST_FILE_ID").InnerText);
-                int measuerdFileId = Convert.ToInt32(loadNode.SelectSingleNode("MEASURED_FILE_ID").InnerText);
-                Load load = new Load(id, timestamp, forecastValue, measuredValue, absDeviation, squaredDeviation, forecastFileId, measuerdFileId);
-
-                loads.Add(load.ID, load);
-            }
-
-            return loads;
         }
 
         public Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast)
@@ -207,14 +183,14 @@ namespace Server
                 errorIDcounter++;
                 errorID = errorIDcounter;
                 Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
-                AuditDatabaseEntry(auditFile);
-               // throw new FaultException<InvalidFileException>(ex);
+                InMemoryDatabase.auditFiles.Add(auditFile.ID, auditFile);
+                 throw new FaultException<InvalidFileException>(ex);
             }
             return forecastValue;
         }
 
         public Dictionary<int, Load> LoadDataFromCsv(string filePathMeasured, string filePathForecast)
-        {    
+        {
             Dictionary<int, Load> loadData = LoadMeasuredDataFromCSV(filePathMeasured); // uzimamo measured value, timestamp i FORECAST_ID. Fali nam forecast value i ID
             Dictionary<int, Load> loadForecast = LoadForecastDataFromCSV(filePathForecast); // koji dodajemo odavde
 
@@ -232,117 +208,195 @@ namespace Server
                 /// Kreiranje LOAD objekata po vremenu, sat po sat 
                 if (!loadedTimestamp.Contains(l.TIMESTAMP))   /// Ako u recniku nemamo objekat napravi ga, u suprotnom ga azuriraj                                                       
                 {
-                    LoadDatabaseEntry(l);
+                    InMemoryDatabase.db.Add(l.ID, l);
                     loadedTimestamp.Add(l.TIMESTAMP);
                 }
                 else
                 {
-                    LoadDatabaseEntry(l);
+                    InMemoryDatabase.db[l.ID] = l;
                 }
                 /// Nakon kreiranja/azuriranja dodati objekat u bazu / taj deo fali
-                CalculateDeviation(l);
+
             }
             ImportFile(filePathMeasured);
             ImportFile(filePathForecast); // nisam siguran oko prosledjivanja ovog parametra load
             return loadData;
-        } 
-        
+        }
+
         public void ImportFile(string path)
         {
+            List<ImportedFile> tempList = new List<ImportedFile>();
+            Load load = new Load();
             ImportedFile importedFile = new ImportedFile();
+            bool valid = false;
             string fileName = "";
-           
-            var parts = path.Split('/');
-            fileName = parts[2];
-            importedIDcounter++;
-            importedID = importedIDcounter;
-            importedFile.ID = importedID;
-            importedFile.FILENAME = fileName;
-            ImportedFileDatabaseEntry(importedFile);
+
+            foreach (ImportedFile i in InMemoryDatabase.importedFiles.Values)
+            {
+                if (i.FILENAME == path)
+                {
+                    var parts = path.Split('/');
+                    fileName = parts[2];
+                    importedFile.ID = i.ID;
+                    importedFile.FILENAME = fileName;
+                    valid = true;
+                    break;
+                }
+                valid = false;
+            }
+            if (!valid)
+            {
+                var parts = path.Split('/');
+                fileName = parts[2];
+                importedIDcounter++;
+                importedID = importedIDcounter;
+                importedFile.ID = importedID;
+                importedFile.FILENAME = fileName;
+                tempList.Add(importedFile); // dodajemo u InMemory bazu podataka
+            }
+            ImportedFileDatabaseEntry(tempList);
         }
-        public void CalculateDeviation(Load l) // Funkcija za racunanje odstupanja
+        public void CalculateDeviation() // Funkcija za racunanje odstupanja
         {
             string odstupanjeMetoda = ConfigurationManager.AppSettings["OdstupanjeMetoda"];
 
-            
-            if (l.FORECAST_VALUE > 0 && l.MEASURED_VALUE > 0)
+            foreach (Load l in InMemoryDatabase.db.Values)
             {
-                if (odstupanjeMetoda == "ApOdstupanje")
+                if (l.FORECAST_VALUE > 0 && l.MEASURED_VALUE > 0)
                 {
-                        l.ABSOLUTE_PERCENTAGE_DEVIATION = Math.Round(((Math.Abs(l.MEASURED_VALUE - l.FORECAST_VALUE)) / l.MEASURED_VALUE) * 100, 4);
-                }
-                else if (odstupanjeMetoda == "KvOdstupanje")
-                {
-                        l.SQUARED_DEVIATION = Math.Round(Math.Pow(((l.MEASURED_VALUE - l.FORECAST_VALUE) / l.MEASURED_VALUE), 2), 4);
-                }
-                else
-                {
-                    CalculationException ce = new CalculationException()
+                    if (odstupanjeMetoda == "ApOdstupanje")
                     {
-                        Razlog = "Niste odabrali nacin racunanja"
-                    };
-                    throw new FaultException<CalculationException>(ce, ce.Razlog);
+                        l.ABSOLUTE_PERCENTAGE_DEVIATION = Math.Round(((Math.Abs(l.MEASURED_VALUE - l.FORECAST_VALUE)) / l.MEASURED_VALUE) * 100, 4);
+                    }
+                    else if (odstupanjeMetoda == "KvOdstupanje")
+                    {
+                        l.SQUARED_DEVIATION = Math.Round(Math.Pow(((l.MEASURED_VALUE - l.FORECAST_VALUE) / l.MEASURED_VALUE), 2), 4);
+                    }
+                    else
+                    {
+                        CalculationException ce = new CalculationException()
+                        {
+                            Razlog = "Niste odabrali nacin racunanja"
+                        };
+                        throw new FaultException<CalculationException>(ce, ce.Razlog);
+                    }
                 }
             }
-            LoadDatabaseEntry(l);
-
-           
+            LoadDatabaseEntry(InMemoryDatabase.db.Values.ToList());
         }
-        public void AuditDatabaseEntry(Audit audit)
+        public void AuditDatabaseEntry(List<Audit> dict)
         {
             string VrstaUpisa = ConfigurationManager.AppSettings["VrstaUpisa"];
 
             if (VrstaUpisa == "XMLDatabase")
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(Audit));
+                XmlSerializer serializer = new XmlSerializer(typeof(List<Audit>));
 
-                using (StreamWriter writer = new StreamWriter("AuditDB.xml", true))
+                using (StreamWriter writer = new StreamWriter("AuditDB.xml"))
                 {
-                    serializer.Serialize(writer, audit);
+                    serializer.Serialize(writer, dict);
                 }
             }
             else if (VrstaUpisa == "InMemoryDatabase")
             {
-                InMemoryDatabase.auditFiles[audit.ID] = audit;
+                foreach (Audit audit in dict)
+                {
+                    InMemoryDatabase.auditFiles[audit.ID] = audit;
+                }
             }
         }
-        public void ImportedFileDatabaseEntry(ImportedFile impFile)
+
+        public Dictionary<int, Load> ReadXML(string filepath)
         {
-           
+            Dictionary<int, Load> loads = new Dictionary<int, Load>();
+            XmlDocument xmlDoc = new XmlDocument();
+
+            // Učitavanje XML datoteke
+            xmlDoc.Load(filepath);
+
+            // Čitanje vrednosti iz XML datoteke
+            XmlNodeList loadNodes = xmlDoc.SelectNodes("/ArrayOfLoad/Load");
+            foreach (XmlNode loadNode in loadNodes)
+            {
+                int id = Convert.ToInt32(loadNode.SelectSingleNode("ID").InnerText);
+                string timestamp = loadNode.SelectSingleNode("TIMESTAMP").InnerText;
+                double forecastValue = Convert.ToDouble(loadNode.SelectSingleNode("FORECAST_VALUE").InnerText);
+                double measuredValue = Convert.ToDouble(loadNode.SelectSingleNode("MEASURED_VALUE").InnerText);
+                double absDeviation = Convert.ToDouble(loadNode.SelectSingleNode("ABSOLUTE_PERCENTAGE_DEVIATION").InnerText);
+                double squaredDeviation = Convert.ToDouble(loadNode.SelectSingleNode("SQUARED_DEVIATION").InnerText);
+                int forecastFileId = Convert.ToInt32(loadNode.SelectSingleNode("FORECAST_FILE_ID").InnerText);
+                int measuerdFileId = Convert.ToInt32(loadNode.SelectSingleNode("MEASURED_FILE_ID").InnerText);
+                Load load = new Load(id, timestamp, forecastValue, measuredValue, absDeviation, squaredDeviation, forecastFileId, measuerdFileId);
+
+                loads.Add(load.ID, load);
+            }
+
+            return loads;
+        }
+
+        public void ImportedFileDatabaseEntry(List<ImportedFile> dict)
+        {
             string VrstaUpisa = ConfigurationManager.AppSettings["VrstaUpisa"];
 
             if (VrstaUpisa == "XMLDatabase")
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(ImportedFile));
+                XmlSerializer serializer = new XmlSerializer(typeof(List<ImportedFile>));
 
-                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml", true))
+                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml"))
                 {
-                    serializer.Serialize(writer, impFile);
+                    serializer.Serialize(writer, dict);
                 }
             }
             else if (VrstaUpisa == "InMemoryDatabase")
             {
-                InMemoryDatabase.importedFiles[impFile.ID] = impFile;
+                foreach (ImportedFile impFile in dict)
+                {
+                    InMemoryDatabase.importedFiles[impFile.ID] = impFile;
+                }
             }
         }
-        public void LoadDatabaseEntry(Load load)
+
+        public void LoadDatabaseEntry(List<Load> dict)
         {
             string VrstaUpisa = ConfigurationManager.AppSettings["VrstaUpisa"];
 
             if (VrstaUpisa == "XMLDatabase")
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(Load));
-                using (StreamWriter writer = new StreamWriter("LoadDB.xml", true))
+                XmlSerializer serializer = new XmlSerializer(typeof(List<Load>));
+                using (StreamWriter writer = new StreamWriter("LoadDB.xml"))
                 {
-                    serializer.Serialize(writer, load);
+                    serializer.Serialize(writer, dict);
                 }
             }
             else if (VrstaUpisa == "InMemoryDatabase")
             {
-                InMemoryDatabase.db[load.ID] = load;
+                foreach (Load load in dict)
+                {
+                    InMemoryDatabase.db[load.ID] = load;
+                }
             }
         }
 
-    
+        public MemoryStream SendMessage(MemoryStream message)
+        {
+            // Čitanje poruke iz MemoryStream-a
+            StreamReader reader = new StreamReader(message);
+            receivedMessage = reader.ReadToEnd();
+
+            Dictionary<int, Load> tempDict = new Dictionary<int, Load>();
+
+            Console.WriteLine("Primljena poruka sa klijenta: " + receivedMessage);
+
+            // Pravljenje MemoryStream-a za odgovor
+            MemoryStream responseStream = new MemoryStream();
+            StreamWriter writer = new StreamWriter(responseStream);
+            writer.Write("Server je primio poruku.");
+            writer.Flush();
+            responseStream.Position = 0;
+
+            return responseStream;
+        }
+
+
     }
 }

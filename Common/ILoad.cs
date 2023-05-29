@@ -1,6 +1,7 @@
 ﻿using Common.Exceptions;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.ServiceModel;
 using System.Text;
@@ -17,17 +18,17 @@ namespace Common
 
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        void LoadDatabaseEntry(Load load);
+        void LoadDatabaseEntry(List<Load> list);
        
         
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        void ImportedFileDatabaseEntry(ImportedFile dict);
+        void ImportedFileDatabaseEntry(List<ImportedFile> list);
        
         
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        void AuditDatabaseEntry(Audit audit);
+        void AuditDatabaseEntry(List<Audit> list);
 
         
         [OperationContract]
@@ -40,10 +41,13 @@ namespace Common
 
         [OperationContract]
         [FaultContract(typeof(CalculationException))]
-        void CalculateDeviation(Load load);
+        void CalculateDeviation();
 
         [OperationContract]
         Dictionary<int, Load> ReadXML(string filepath);
+        
+        [OperationContract]
+        MemoryStream SendMessage(MemoryStream message);
 
     }
 }
