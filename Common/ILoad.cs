@@ -14,28 +14,28 @@ namespace Common
     {
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        Dictionary<int, Load> LoadDataFromCsv(string filePathMeasured, string filePathForecast);
+        Dictionary<int, Load> LoadDataFromCsv(string forecastPath, string measuredPath);
 
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
         void LoadDatabaseEntry(List<Load> list);
-       
-        
+
+
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
         void ImportedFileDatabaseEntry(List<ImportedFile> list);
-       
-        
+
+
         [OperationContract]
         [FaultContract(typeof(InvalidFileException))]
-        void AuditDatabaseEntry(List<Audit> list);
+        void AuditDatabaseEntry(Audit a);
 
-        
+
         [OperationContract]
         Dictionary<int, Load> LoadMeasuredDataFromCSV(string filePathMeasured);
-       
-        
-        
+
+
+
         [OperationContract]
         Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast);
 
@@ -43,11 +43,11 @@ namespace Common
         [FaultContract(typeof(CalculationException))]
         void CalculateDeviation();
 
-        [OperationContract]
-        Dictionary<int, Load> ReadXML(string filepath);
-        
-        [OperationContract]
-        MemoryStream SendMessage(MemoryStream message);
 
+        [OperationContract]
+        void SendMessage(byte[] message);
+
+        [OperationContract]
+        Dictionary<int, Load> ReadXmlFile(string filePath);
     }
 }

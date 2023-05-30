@@ -14,36 +14,36 @@ namespace Client
         static void Main(string[] args)
         {
 
-            Console.WriteLine("Unesite naziv datoteke iz koje zelite da iščitate podatke.\nNaziv se sastoji od tipa datoteke i datuma, npr \"forecast_2023_01_27.csv\"");
-            Console.WriteLine("Tip datoteke može biti\n\tforecast - za prognoziranu potrošnju i \n\tmeasured - za ostvarenu potrošnju");
-            Console.WriteLine("Unesite \"kraj\" za gasenje klijenta");
-            string datoteka = "";
-           
-                using (var client = new ChannelFactory<ICommunication>("Communication"))
+            Console.WriteLine("Dopunite naziv datoteke.\nNaziv se sastoji od tipa datoteke i datuma, npr \"forecast_2023_01_27.csv\"");
+            string forecastPath = "";
+            string measuredPath = "";
+            string path = "";
+
+            using (var client = new ChannelFactory<ILoad>("ServiceLoad"))
+            {
+                ILoad proxy = client.CreateChannel();
+               using(MemoryStream stream = new MemoryStream())
                 {
-                    ICommunication proxy = client.CreateChannel();
-                    MemoryStream stream = new MemoryStream();
-                    StreamWriter writer = new StreamWriter(stream);
 
-                     while(datoteka.ToLower() != "kraj")
-                     { 
-                         Console.Write("Unesite naziv datoteke: ");
-                         datoteka = Console.ReadLine().Trim();
-
-                         writer.Write(datoteka);
-
-                         writer.Flush();
-                         stream.Position = 0;
-
-                         MemoryStream responseStream = proxy.SendMessage(stream);
-                         StreamReader reader = new StreamReader(responseStream);
-                         string response = reader.ReadToEnd();
-
-                         Console.WriteLine("Odgovor od servera: " + response);
-                     }
+                    using (StreamWriter writer = new StreamWriter(stream))
+                    {
+                        
+                        while (true)
+                        {
+                            Console.Write("Unos forecast datoteke: ");
+                            forecastPath = Console.ReadLine().Trim();
 
 
+                            Console.Write("Unos measured datoteke: ");
+                            measuredPath = Console.ReadLine().Trim();
+
+                            path = forecastPath + "#" + measuredPath;
+                            byte[] messageBytes = System.Text.Encoding.UTF8.GetBytes(path);
+                            proxy.SendMessage(messageBytes);
+                        }
+                    }
                 }
+            }
         }
     }
 }
