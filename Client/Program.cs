@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using System.ServiceModel;
 using Common;
-using System.IO;
+using System.Text;
 
 namespace Client
 {
@@ -13,33 +11,55 @@ namespace Client
     {
         static void Main(string[] args)
         {
-
-            Console.WriteLine("Dopunite naziv datoteke.\nNaziv se sastoji od tipa datoteke i datuma, npr \"forecast_2023_01_27.csv\"");
-            string forecastPath = "";
-            string measuredPath = "";
-            string path = "";
+            Console.WriteLine("Dopunite naziv datoteke.\nNaziv se sastoji od tipa datoteke i datuma, npr 'forecast_2023_01_27.csv'");
+            string forecastPath;
+            string measuredPath;
 
             using (var client = new ChannelFactory<ILoad>("ServiceLoad"))
             {
                 ILoad proxy = client.CreateChannel();
-               using(MemoryStream stream = new MemoryStream())
+
+                while (true)
                 {
+                    Console.Write("Unos forecast datoteke: ");
+                    forecastPath = "csv/forecast/" + Console.ReadLine().Trim();
 
-                    using (StreamWriter writer = new StreamWriter(stream))
+                    Console.Write("Unos measured datoteke: ");
+                    measuredPath = "csv/measured/" + Console.ReadLine().Trim();
+
+                    // Read forecast file into a byte array
+                    byte[] forecastBytes = File.ReadAllBytes(forecastPath);
+
+                    // Read measured file into a byte array
+                    byte[] measuredBytes = File.ReadAllBytes(measuredPath);
+
+                    using (MemoryStream stream = new MemoryStream())
                     {
+                        // Write the forecast file bytes to the stream
+                        stream.Write(forecastBytes, 0, forecastBytes.Length);
+
+                        string data = "#";
+
+                        // Convert the string to bytes using UTF-8 encoding
+                        byte[] bytes = Encoding.UTF8.GetBytes(data);
+
+                        // Write the bytes to the stream
+                        stream.Write(bytes, 0, bytes.Length);
+                        // Write the measured file bytes to the stream
+                        stream.Write(measuredBytes, 0, measuredBytes.Length);
                         
-                        while (true)
+
+
+                        // Set the stream position back to the beginning
+                        stream.Position = 0;
+
+                        if (proxy.SendFiles(stream))
                         {
-                            Console.Write("Unos forecast datoteke: ");
-                            forecastPath = Console.ReadLine().Trim();
-
-
-                            Console.Write("Unos measured datoteke: ");
-                            measuredPath = Console.ReadLine().Trim();
-
-                            path = forecastPath + "#" + measuredPath;
-                            byte[] messageBytes = System.Text.Encoding.UTF8.GetBytes(path);
-                            proxy.SendMessage(messageBytes);
+                            Console.WriteLine("Datoteke su uspešno obrađene!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Datoteke nisu uspešno obrađene!");
                         }
                     }
                 }

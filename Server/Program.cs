@@ -19,12 +19,12 @@ namespace Server
 
             ServiceLoad sl = new ServiceLoad();
 
-            Dictionary<int, Load> dict = sl.ReadXmlFile("LoadDB.xml");
+            /*Dictionary<int, Load> dict = sl.ReadXmlFile("LoadDB.xml");
                 Console.WriteLine("Ispis" + dict.Count);
             foreach(Load l in dict.Values)
             {
                 Console.WriteLine(l);
-            }
+            }*/
 
             using (ServiceHost host = new ServiceHost(typeof(ServiceLoad)))
             {

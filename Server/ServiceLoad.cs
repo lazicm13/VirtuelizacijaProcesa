@@ -7,6 +7,7 @@ using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.ServiceModel;
+using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -18,10 +19,12 @@ namespace Server
     {
         /// brojaci za dodelu ID
         public static int counter = 0;
+        public static int counter2 = 0;
         public static int forecastCounterID = 0;
         public static int measuredCounterID = 0;
         public static int errorIDcounter = 0;
         private string tempTimestamp;
+        public static bool xmlEmpty = false;
 
         public delegate bool DatabaseSelection();
         public event DatabaseSelection SelectDatabase;
@@ -47,13 +50,14 @@ namespace Server
         public string receivedMessage;
 
         #region Pomocne liste
-        public static Dictionary<int, Load> loadList = new Dictionary<int, Load>();
+        public static Dictionary<int, Load> loadDict = new Dictionary<int, Load>();
         public static List<ImportedFile> importedFileList = new List<ImportedFile>();
         public static List<string> loadedTimestamp = new List<string>();
         public static List<string> loadedMeasuredCSVFiles = new List<string>();
         public static List<string> loadedForecastCSVFiles = new List<string>();
         public static Dictionary<int, ImportedFile> importedList = new Dictionary<int, ImportedFile>();
-        public static Dictionary<int, Load> data = new Dictionary<int, Load>();
+
+
         #endregion
 
         public bool IsXmlDatabase()
@@ -65,27 +69,112 @@ namespace Server
             return useXML;
         }
 
-        public Dictionary<int, Load> LoadMeasuredDataFromCSV(string filePathMeasured)
+        public Dictionary<int, Load> LoadForecastDataFromCSV(string file)
         {
-            Dictionary<int, Load> measuredValue = new Dictionary<int, Load>();
-            int rowCounter = 0; /// brojac koji proverava da li je broj dana 23 - 25
+            Dictionary<int, Load> forecastValue = new Dictionary<int, Load>();
 
-            /// dodajemo u listu svaki otvoreni CSV fajl i povecavamo brojac na osnovu kog mu dodeljujemo ID
-            if (!loadedMeasuredCSVFiles.Contains(filePathMeasured))
+            
+            var lines = file.Split('\n');
+            string fileName = "forecast_";
+            var valuesArray = lines[2].Split(',');
+            fileName += valuesArray[0].Substring(0, 10); // izvlacimo timestamp
+
+            if (!loadedForecastCSVFiles.Contains(fileName))
             {
-                loadedMeasuredCSVFiles.Add(filePathMeasured);
-                measuredCounterID++;
+                loadedForecastCSVFiles.Add(fileName);
+                forecastCounterID++;
             }
 
-            using (var reader = new StreamReader(filePathMeasured))
+            for (int i=0;i<lines.Length;i++)
             {
-                while (!reader.EndOfStream)
-                {
-                    var line = reader.ReadLine();
-                    var values = line.Split(',');
 
+                var values = lines[i].Split(',');
+                
+                ///Provera da li u prvom redu imamo "header"
+                if (values.Length >= 2)
+                {
+                    if (lines[i].Contains("TIME_STAMP"))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        if (values.Length > 2)
+                        {
+                            Load obj = new Load
+                            {
+                                TIMESTAMP = values[0] + " " + values[1],
+                                FORECAST_VALUE = Convert.ToDouble(values[2])
+                            };
+                            tempTimestamp = obj.TIMESTAMP;
+                            counter2++;
+                            obj.ID = counter2;
+
+                            obj.FORECAST_FILE_ID = forecastCounterID;
+                            forecastValue.Add(obj.ID, obj);
+                        }
+                        else
+                        {
+                            Load obj = new Load
+                            {
+                                TIMESTAMP = values[0],
+                                FORECAST_VALUE = Convert.ToDouble(values[1])
+                            };
+                            tempTimestamp = obj.TIMESTAMP;
+                            counter2++;
+                            obj.ID = counter2;
+
+                            obj.FORECAST_FILE_ID = forecastCounterID;
+                            forecastValue.Add(obj.ID, obj);
+                        }
+                    }
+                }
+                
+            }
+            if (forecastValue.Count < 23 || forecastValue.Count > 25)
+            {
+                InvalidFileException ex = new InvalidFileException()
+                {
+                    Razlog = "Datoteka nije validna"
+                };
+
+                errorIDcounter++;
+                errorID = errorIDcounter;
+                Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
+                AuditDatabaseEntry(auditFile);
+                throw new FaultException<InvalidFileException>(ex);
+            }
+            ImportFile(fileName);
+            return forecastValue;
+        }
+
+        public Dictionary<int, Load> LoadMeasuredDataFromCSV(string file)
+        {
+            Dictionary<int, Load> measuredValue = new Dictionary<int, Load>();
+
+            var lines = file.Split('\n');
+            string fileName = "measured_";
+            var valuesArray = lines[2].Split(',');
+            fileName += valuesArray[0].Substring(0, 10); // izvlacimo timestamp
+
+
+
+            if (!loadedMeasuredCSVFiles.Contains(fileName))
+            {
+                loadedMeasuredCSVFiles.Add(fileName);
+                measuredCounterID++;
+            }
+            
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+
+                var values = lines[i].Split(',');
+
+                if (values.Length >= 2)
+                {
                     ///Provera da li u prvom redu imamo "header"
-                    if (line.Contains("TIME_STAMP"))
+                    if (lines[i].Contains("TIME_STAMP"))
                     {
                         continue;
                     }
@@ -102,8 +191,8 @@ namespace Server
                             counter++;
                             obj.ID = counter;
 
-                            measuredValue.Add(obj.ID, obj);
                             obj.MEASURED_FILE_ID = measuredCounterID;
+                            measuredValue.Add(obj.ID, obj);
                         }
                         else
                         {
@@ -116,14 +205,13 @@ namespace Server
                             counter++;
                             obj.ID = counter;
 
-                            measuredValue.Add(obj.ID, obj);
                             obj.MEASURED_FILE_ID = measuredCounterID;
+                            measuredValue.Add(obj.ID, obj);
                         }
                     }
-                    rowCounter++;
                 }
             }
-            if (rowCounter < 23 || rowCounter > 25)
+            if (measuredValue.Count < 23 || measuredValue.Count > 25)
             {
                 InvalidFileException ex = new InvalidFileException()
                 {
@@ -136,86 +224,29 @@ namespace Server
                 AuditDatabaseEntry(auditFile);
                 throw new FaultException<InvalidFileException>(ex);
             }
+            ImportFile(fileName);
             return measuredValue;
         }
 
-        public Dictionary<int, Load> LoadForecastDataFromCSV(string filePathForecast)
+        public Dictionary<int, Load> LoadDataFromCsv(string recievedMessage)
         {
-            Dictionary<int, Load> forecastValue = new Dictionary<int, Load>();
-            int rowCounter = 0;// brojac koji proverava da li je broj dana 23 - 25
-
-            // dodajemo u listu svaki otvoreni CSV fajl i povecavamo brojac na osnovu kog mu dodeljujemo ID
-            if (!loadedForecastCSVFiles.Contains(filePathForecast))
+            if (File.Exists("LoadDB.xml"))
             {
-                loadedForecastCSVFiles.Add(filePathForecast);
-                forecastCounterID++;
-            }
-
-            using (var reader = new StreamReader(filePathForecast))
-            {
-                while (!reader.EndOfStream)
+                loadDict = ReadXmlFile("LoadDB.xml");
+                foreach (Load load in loadDict.Values)
                 {
-                    var line = reader.ReadLine();
-                    var values = line.Split(',');
-                    //Provera da li u prvom redu imamo "header"
-                    if (line.Contains("TIME_STAMP"))
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        if (values.Length > 2)
-                        {
-                            Load obj = new Load
-                            {
-                                TIMESTAMP = values[0] + " " + values[1],
-                                FORECAST_VALUE = Convert.ToDouble(values[2])
-                            };
-                            tempTimestamp = obj.TIMESTAMP;
-                            counter++;
-                            obj.ID = counter;
-                            forecastValue.Add(obj.ID, obj);
-                            obj.FORECAST_FILE_ID = forecastCounterID;
-                        }
-                        else
-                        {
-                            Load obj = new Load
-                            {
-                                TIMESTAMP = values[0],
-                                FORECAST_VALUE = Convert.ToDouble(values[1])
-                            };
-                            tempTimestamp = obj.TIMESTAMP;
-                            counter++;
-                            obj.ID = counter;
-                            forecastValue.Add(obj.ID, obj);
-                            obj.FORECAST_FILE_ID = forecastCounterID;
-                        }
-                    }
-                    rowCounter++;
+                    loadedTimestamp.Add(load.TIMESTAMP);
                 }
-            } // Nakon ovog bloka, metoda Dispose() će biti automatski pozvana na objektu reader
-
-            if (rowCounter < 23 || rowCounter > 25)
-            {
-                InvalidFileException ex = new InvalidFileException()
-                {
-                    Razlog = "Datoteka nije validna"
-                };
-                errorIDcounter++;
-                errorID = errorIDcounter;
-                Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
-                AuditDatabaseEntry(auditFile);
-                throw new FaultException<InvalidFileException>(ex);
+                measuredCounterID = loadDict[loadDict.Count].MEASURED_FILE_ID;
+                forecastCounterID = loadDict[loadDict.Count].FORECAST_FILE_ID;
+                importedID = forecastCounterID;
             }
-            return forecastValue;
-        }
+            Dictionary<int, Load> tempTimestamp = new Dictionary<int, Load>();
+            var files = recievedMessage.Split('#');
+            int startId = loadDict.Count + 1;
+            Dictionary<int, Load> loadForecast = LoadForecastDataFromCSV(files[0]);
+            Dictionary<int, Load> tempData = LoadMeasuredDataFromCSV(files[1]);
 
-        public Dictionary<int, Load> LoadDataFromCsv(string forecastPath, string measuredPath)
-        {
-            data = ReadXmlFile("LoadDB.xml");
-            Dictionary<int, Load> tempData = LoadMeasuredDataFromCSV(measuredPath);
-            Dictionary<int, Load> loadForecast = LoadForecastDataFromCSV(forecastPath);
-    
             foreach (Load l in tempData.Values)
             {
                 foreach (Load l1 in loadForecast.Values)
@@ -226,40 +257,57 @@ namespace Server
                         l.FORECAST_FILE_ID = l1.FORECAST_FILE_ID;
                     }
                 }
-
                 /// Kreiranje LOAD objekata po vremenu, sat po sat 
                 /// Ako u recniku nemamo objekat napravi ga, u suprotnom ga azuriraj
                 if (!loadedTimestamp.Contains(l.TIMESTAMP))
                 {
-                    loadList.Add(l.ID, l);
+                    loadDict.Add(startId, l);
                     loadedTimestamp.Add(l.TIMESTAMP);
+                    startId++;
                 }
                 else
                 {
-                    loadList[l.ID] = l;
+                    tempTimestamp.Add(l.ID, l);
+                }
+
+
+            }
+            int id = 1;
+
+            foreach (Load load in loadDict.Values)
+            {
+                load.ID = id;
+                id++;
+            }
+            foreach (Load load in loadDict.Values)
+            {
+                foreach(Load l in tempTimestamp.Values)
+                {
+                    if(load.TIMESTAMP.Trim().Equals(l.TIMESTAMP))
+                    {
+                        load.MEASURED_VALUE = l.MEASURED_VALUE;
+                        load.FORECAST_VALUE = l.FORECAST_VALUE;
+                        load.SQUARED_DEVIATION = l.SQUARED_DEVIATION;
+                        load.ABSOLUTE_PERCENTAGE_DEVIATION = l.ABSOLUTE_PERCENTAGE_DEVIATION;
+                    }
                 }
             }
 
-            ImportFile(forecastPath);
-            ImportFile(measuredPath);
-            return tempData;
+            return loadDict; // probam da vratim loadDict umesto tempdata.
         }
 
 
 
-        public void ImportFile(string path)
+        public void ImportFile(string fileName)
         {
-            Load load = new Load();
             ImportedFile importedFile = new ImportedFile();
             bool valid = false;
-            string fileName = "";
 
             foreach (ImportedFile i in importedFileList)
             {
-                if (i.FILENAME == path)
-                {
-                    var parts = path.Split('/');
-                    fileName = parts[2];
+                if (i.FILENAME == fileName)
+                {   
+
                     importedFile.ID = i.ID;
                     importedFile.FILENAME = fileName;
                     valid = true;
@@ -269,8 +317,6 @@ namespace Server
             }
             if (!valid)
             {
-                var parts = path.Split('/');
-                fileName = parts[2];
                 importedIDcounter++;
                 importedID = importedIDcounter;
                 importedFile.ID = importedID;
@@ -283,7 +329,7 @@ namespace Server
         {
             string odstupanjeMetoda = ConfigurationManager.AppSettings["OdstupanjeMetoda"];
 
-            foreach (Load l in data.Values)
+            foreach (Load l in loadDict.Values)
             {
                 if (l.FORECAST_VALUE > 0 && l.MEASURED_VALUE > 0)
                 {
@@ -305,7 +351,7 @@ namespace Server
                     }
                 }
             }
-            LoadDatabaseEntry(data.Values.ToList());
+
         }
         public void AuditDatabaseEntry(Audit audit)
         {
@@ -334,7 +380,7 @@ namespace Server
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(List<ImportedFile>));
 
-                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml"))
+                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml", true))
                 {
                     serializer.Serialize(writer, dict);
                 }
@@ -368,72 +414,109 @@ namespace Server
             }
         }
 
-        public void SendMessage(byte[] message)
+        public bool SendFiles(Stream stream)
         {
-
-            string path1 = "csv/";
-            string path2 = "csv/";
-            using (MemoryStream memoryStream = new MemoryStream(message))
+            try
             {
-                try
+                using (MemoryStream memoryStream = new MemoryStream())
                 {
-                    receivedMessage = System.Text.Encoding.UTF8.GetString(memoryStream.ToArray());
+                    stream.CopyTo(memoryStream);
 
-                    var lines = receivedMessage.Split('#');
-                    string forecastPath = lines[0];
-                    string measuredPath = lines[1];
-                    Console.WriteLine("Server received message: " + receivedMessage);
+                    memoryStream.Position = 0;
+                    string recievedMessage;
 
-                    path1 += "forecast/" + forecastPath;
+                    using (StreamReader reader = new StreamReader(memoryStream, Encoding.UTF8))
+                    {
+                        recievedMessage = reader.ReadToEnd();
+                        Console.WriteLine(recievedMessage);
+                    }
 
-                    path2 += "measured/" + measuredPath;
 
-
-
-                    data = LoadDataFromCsv(path1, path2);
+                    loadDict = LoadDataFromCsv(recievedMessage);
                     CalculateDeviation();
-                    LoadDatabaseEntry(data.Values.ToList());
+                    LoadDatabaseEntry(loadDict.Values.ToList());
+                    return true;
                 }
-                catch (FaultException<CalculationException> e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-                catch (FaultException<InvalidFileException> e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-
-
+            }
+            catch (FaultException<CalculationException> e)
+            {
+                Console.WriteLine(e.Message);
+                return false;
+            }
+            catch (FaultException<InvalidFileException> e)
+            {
+                Console.WriteLine(e.Message);
+                return false;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                Console.WriteLine($"Stack Trace:\n{e.StackTrace}");
+                return false;
             }
         }
 
         public Dictionary<int, Load> ReadXmlFile(string filePath)
         {
             Dictionary<int, Load> loads = new Dictionary<int, Load>();
-            XmlDocument xmlDoc = new XmlDocument();
-
-            // Učitavanje XML datoteke
-            xmlDoc.Load(filePath);
-
-            // Čitanje vrednosti iz XML datoteke
-            XmlNodeList loadNodes = xmlDoc.SelectNodes("/ArrayOfLoad/Load");
-            foreach (XmlNode loadNode in loadNodes)
+            using (XmlReader reader = XmlReader.Create(filePath))
             {
-                int id = Convert.ToInt32(loadNode.SelectSingleNode("ID").InnerText);
-                string timestamp = loadNode.SelectSingleNode("TIMESTAMP").InnerText;
-                double forecastValue = Convert.ToDouble(loadNode.SelectSingleNode("FORECAST_VALUE").InnerText);
-                double measuredValue = Convert.ToDouble(loadNode.SelectSingleNode("MEASURED_VALUE").InnerText);
-                double absDeviation = Convert.ToDouble(loadNode.SelectSingleNode("ABSOLUTE_PERCENTAGE_DEVIATION").InnerText);
-                double squaredDeviation = Convert.ToDouble(loadNode.SelectSingleNode("SQUARED_DEVIATION").InnerText);
-                int forecastFileId = Convert.ToInt32(loadNode.SelectSingleNode("FORECAST_FILE_ID").InnerText);
-                int measuerdFileId = Convert.ToInt32(loadNode.SelectSingleNode("MEASURED_FILE_ID").InnerText);
-                Load load = new Load(id, timestamp, forecastValue, measuredValue, absDeviation, squaredDeviation, forecastFileId, measuerdFileId);
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "Load")
+                    {
+                        int id = 0;
+                        string timestamp = string.Empty;
+                        double forecastValue = 0.0;
+                        double measuredValue = 0.0;
+                        double absDeviation = 0.0;
+                        double squaredDeviation = 0.0;
+                        int forecastFileId = 0;
+                        int measuerdFileId = 0;
 
-                loads.Add(load.ID, load);
+                        while (reader.Read())
+                        {
+                            if (reader.NodeType == XmlNodeType.Element)
+                            {
+                                switch (reader.Name)
+                                {
+                                    case "ID":
+                                        id = Convert.ToInt32(reader.ReadInnerXml());
+                                        break;
+                                    case "TIMESTAMP":
+                                        timestamp = reader.ReadInnerXml();
+                                        break;
+                                    case "FORECAST_VALUE":
+                                        forecastValue = Convert.ToDouble(reader.ReadInnerXml());
+                                        break;
+                                    case "MEASURED_VALUE":
+                                        measuredValue = Convert.ToDouble(reader.ReadInnerXml());
+                                        break;
+                                    case "ABSOLUTE_PERCENTAGE_DEVIATION":
+                                        absDeviation = Convert.ToDouble(reader.ReadInnerXml());
+                                        break;
+                                    case "SQUARED_DEVIATION":
+                                        squaredDeviation = Convert.ToDouble(reader.ReadInnerXml());
+                                        break;
+                                    case "FORECAST_FILE_ID":
+                                        forecastFileId = Convert.ToInt32(reader.ReadInnerXml());
+                                        break;
+                                    case "MEASURED_FILE_ID":
+                                        measuerdFileId = Convert.ToInt32(reader.ReadInnerXml());
+                                        break;
+                                }
+                            }
+
+                            if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "Load")
+                            {
+                                Load load = new Load(id, timestamp, forecastValue, measuredValue, absDeviation, squaredDeviation, forecastFileId, measuerdFileId);
+                                loads.Add(id, load);
+                                break;
+
+                            }
+                        }
+                    }
+                }
             }
 
             return loads;
@@ -441,3 +524,4 @@ namespace Server
 
     }
 }
+
