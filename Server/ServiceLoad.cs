@@ -17,7 +17,7 @@ namespace Server
 
     public class ServiceLoad : ILoad
     {
-        /// brojaci za dodelu ID
+        #region Pomocne promenljive
         public static int counter = 0;
         public static int counter2 = 0;
         public static int forecastCounterID = 0;
@@ -26,6 +26,16 @@ namespace Server
         private string tempTimestamp;
         public static bool xmlEmpty = false;
 
+        public static int importedIDcounter = 0;
+        public int errorID { get; set; }
+        public int importedID { get; set; }
+        public string receivedMessage;
+
+        public static Dictionary<int, Load> loadDict = new Dictionary<int, Load>();
+        public static List<string> loadedTimestamp = new List<string>();
+        public static List<string> loadedMeasuredCSVFiles = new List<string>();
+        public static List<string> loadedForecastCSVFiles = new List<string>();
+        #endregion
         public delegate bool DatabaseSelection();
         public event DatabaseSelection SelectDatabase;
 
@@ -41,25 +51,7 @@ namespace Server
                 return false;
             }
         }
-
-
-
-        public static int importedIDcounter = 0;
-        public int errorID { get; set; }
-        public int importedID { get; set; }
-        public string receivedMessage;
-
-        #region Pomocne liste
-        public static Dictionary<int, Load> loadDict = new Dictionary<int, Load>();
-        public static List<ImportedFile> importedFileList = new List<ImportedFile>();
-        public static List<string> loadedTimestamp = new List<string>();
-        public static List<string> loadedMeasuredCSVFiles = new List<string>();
-        public static List<string> loadedForecastCSVFiles = new List<string>();
-        public static Dictionary<int, ImportedFile> importedList = new Dictionary<int, ImportedFile>();
-
-
-        #endregion
-
+       
         public bool IsXmlDatabase()
         {
             SelectDatabase = DatabaseSelectionLogic;
@@ -68,16 +60,15 @@ namespace Server
 
             return useXML;
         }
-
+        
         public Dictionary<int, Load> LoadForecastDataFromCSV(string file)
         {
             Dictionary<int, Load> forecastValue = new Dictionary<int, Load>();
 
-            
             var lines = file.Split('\n');
             string fileName = "forecast_";
             var valuesArray = lines[2].Split(',');
-            fileName += valuesArray[0].Substring(0, 10); // izvlacimo timestamp
+            fileName += valuesArray[0].Substring(0, 10); 
 
             if (!loadedForecastCSVFiles.Contains(fileName))
             {
@@ -90,7 +81,6 @@ namespace Server
 
                 var values = lines[i].Split(',');
                 
-                ///Provera da li u prvom redu imamo "header"
                 if (values.Length >= 2)
                 {
                     if (lines[i].Contains("TIME_STAMP"))
@@ -129,7 +119,6 @@ namespace Server
                         }
                     }
                 }
-                
             }
             if (forecastValue.Count < 23 || forecastValue.Count > 25)
             {
@@ -141,7 +130,7 @@ namespace Server
                 errorIDcounter++;
                 errorID = errorIDcounter;
                 Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
-                AuditDatabaseEntry(auditFile);
+                ImportAudit(auditFile);
                 throw new FaultException<InvalidFileException>(ex);
             }
             ImportFile(fileName);
@@ -155,9 +144,7 @@ namespace Server
             var lines = file.Split('\n');
             string fileName = "measured_";
             var valuesArray = lines[2].Split(',');
-            fileName += valuesArray[0].Substring(0, 10); // izvlacimo timestamp
-
-
+            fileName += valuesArray[0].Substring(0, 10); 
 
             if (!loadedMeasuredCSVFiles.Contains(fileName))
             {
@@ -165,15 +152,12 @@ namespace Server
                 measuredCounterID++;
             }
             
-
             for (int i = 0; i < lines.Length; i++)
             {
-
                 var values = lines[i].Split(',');
 
                 if (values.Length >= 2)
                 {
-                    ///Provera da li u prvom redu imamo "header"
                     if (lines[i].Contains("TIME_STAMP"))
                     {
                         continue;
@@ -221,7 +205,7 @@ namespace Server
                 errorIDcounter++;
                 errorID = errorIDcounter;
                 Audit auditFile = new Audit(errorID, tempTimestamp, MessageType.Error, ex.Razlog);
-                AuditDatabaseEntry(auditFile);
+                ImportAudit(auditFile);
                 throw new FaultException<InvalidFileException>(ex);
             }
             ImportFile(fileName);
@@ -242,7 +226,7 @@ namespace Server
                 importedID = forecastCounterID;
             }
             Dictionary<int, Load> tempTimestamp = new Dictionary<int, Load>();
-            var files = recievedMessage.Split('#');
+            var files = recievedMessage.Split('\uFEFF');
             int startId = loadDict.Count + 1;
             Dictionary<int, Load> loadForecast = LoadForecastDataFromCSV(files[0]);
             Dictionary<int, Load> tempData = LoadMeasuredDataFromCSV(files[1]);
@@ -257,8 +241,6 @@ namespace Server
                         l.FORECAST_FILE_ID = l1.FORECAST_FILE_ID;
                     }
                 }
-                /// Kreiranje LOAD objekata po vremenu, sat po sat 
-                /// Ako u recniku nemamo objekat napravi ga, u suprotnom ga azuriraj
                 if (!loadedTimestamp.Contains(l.TIMESTAMP))
                 {
                     loadDict.Add(startId, l);
@@ -269,8 +251,6 @@ namespace Server
                 {
                     tempTimestamp.Add(l.ID, l);
                 }
-
-
             }
             int id = 1;
 
@@ -292,40 +272,36 @@ namespace Server
                     }
                 }
             }
-
-            return loadDict; // probam da vratim loadDict umesto tempdata.
+            return loadDict; 
         }
-
-
 
         public void ImportFile(string fileName)
         {
-            ImportedFile importedFile = new ImportedFile();
-            bool valid = false;
-
-            foreach (ImportedFile i in importedFileList)
+            Dictionary<int, ImportedFile> impList = new Dictionary<int, ImportedFile>();
+            if (File.Exists("ImportedFileDB.xml"))
             {
-                if (i.FILENAME == fileName)
-                {   
-
-                    importedFile.ID = i.ID;
-                    importedFile.FILENAME = fileName;
-                    valid = true;
-                    break;
-                }
-                valid = false;
+                impList = ReadImportFile("ImportedFileDB.xml");
             }
-            if (!valid)
-            {
-                importedIDcounter++;
-                importedID = importedIDcounter;
-                importedFile.ID = importedID;
-                importedFile.FILENAME = fileName;
-                importedFileList.Add(importedFile);
-            }
-            ImportedFileDatabaseEntry(importedFileList);
+            int startID = impList.Count + 1;
+            ImportedFile impFile = new ImportedFile(startID,  fileName);
+            impList.Add(startID, impFile);
+            ImportedFileDatabaseEntry(impList.Values.ToList());
         }
-        public void CalculateDeviation() // Funkcija za racunanje odstupanja
+
+        public void ImportAudit(Audit a)
+        {
+            Dictionary<int, Audit> loadAudit = new Dictionary<int, Audit>();
+            if (File.Exists("AuditDB.xml"))
+            {
+                loadAudit = ReadAuditFile("AuditDB.xml");
+            }
+            int startID = loadAudit.Count + 1;
+            a.ID = startID;
+            loadAudit.Add(startID, a);
+            AuditDatabaseEntry(loadAudit.Values.ToList());
+        }
+      
+        public void CalculateDeviation() 
         {
             string odstupanjeMetoda = ConfigurationManager.AppSettings["OdstupanjeMetoda"];
 
@@ -351,18 +327,17 @@ namespace Server
                     }
                 }
             }
-
         }
-        public void AuditDatabaseEntry(Audit audit)
+      
+        public void AuditDatabaseEntry(List<Audit> audits)
         {
-
             if (IsXmlDatabase())
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(Audit));
+                XmlSerializer serializer = new XmlSerializer(typeof(List<Audit>));
 
-                using (StreamWriter writer = new StreamWriter("AuditDB.xml", true))
+                using (StreamWriter writer = new StreamWriter("AuditDB.xml"))
                 {
-                    serializer.Serialize(writer, audit);
+                    serializer.Serialize(writer, audits);
                 }
             }
             else
@@ -380,7 +355,7 @@ namespace Server
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(List<ImportedFile>));
 
-                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml", true))
+                using (StreamWriter writer = new StreamWriter("ImportedFileDB.xml"))
                 {
                     serializer.Serialize(writer, dict);
                 }
@@ -428,9 +403,7 @@ namespace Server
                     using (StreamReader reader = new StreamReader(memoryStream, Encoding.UTF8))
                     {
                         recievedMessage = reader.ReadToEnd();
-                        Console.WriteLine(recievedMessage);
                     }
-
 
                     loadDict = LoadDataFromCsv(recievedMessage);
                     CalculateDeviation();
@@ -506,11 +479,96 @@ namespace Server
                                         break;
                                 }
                             }
-
                             if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "Load")
                             {
                                 Load load = new Load(id, timestamp, forecastValue, measuredValue, absDeviation, squaredDeviation, forecastFileId, measuerdFileId);
                                 loads.Add(id, load);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            return loads;
+        }
+    
+        public Dictionary<int, ImportedFile> ReadImportFile(string filePath)
+        {
+            Dictionary<int, ImportedFile> imports = new Dictionary<int, ImportedFile>();
+            using (XmlReader reader = XmlReader.Create(filePath))
+            {
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "ImportedFile")
+                    {
+                        int importedId = 0;
+                        string filename = string.Empty;
+
+                        while (reader.Read())
+                        {
+                            if (reader.NodeType == XmlNodeType.Element)
+                            {
+                                switch (reader.Name)
+                                {
+                                    case "ID":
+                                        importedId = Convert.ToInt32(reader.ReadInnerXml());
+                                        break;
+                                    case "FILENAME":
+                                        filename = reader.ReadInnerXml();
+                                        break;
+                                }
+                            }
+                            if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "ImportedFile")
+                            {
+                                ImportedFile imp = new ImportedFile(importedId, filename);
+                                imports.Add(importedId, imp);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            return imports;
+        }
+
+        public Dictionary<int, Audit> ReadAuditFile(string filePath)
+        {
+            Dictionary<int, Audit> audits = new Dictionary<int, Audit>();
+            using (XmlReader reader = XmlReader.Create(filePath))
+            {
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "Audit")
+                    {
+                        int auditID = 0;
+                        string timestamp = string.Empty;
+                        string messageType = string.Empty;
+                        string message = string.Empty;
+
+                        while (reader.Read())
+                        {
+                            if (reader.NodeType == XmlNodeType.Element)
+                            {
+                                switch (reader.Name)
+                                {
+                                    case "ID":
+                                        auditID = Convert.ToInt32(reader.ReadInnerXml());
+                                        break;
+                                    case "FILENAME":
+                                        timestamp = reader.ReadInnerXml();
+                                        break;
+                                    case "MESSAGE_TYPE":
+                                        messageType = reader.ReadInnerXml();
+                                        break;
+                                    case "MESSAGE":
+                                        message = reader.ReadInnerXml();
+                                        break;
+                                }
+                            }
+                            if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "Audit")
+                            {
+                                Audit auditFile = new Audit(auditID, timestamp, MessageType.Error, message);
+                                audits.Add(auditID, auditFile);
                                 break;
 
                             }
@@ -518,10 +576,8 @@ namespace Server
                     }
                 }
             }
-
-            return loads;
+            return audits;
         }
-
     }
 }
 

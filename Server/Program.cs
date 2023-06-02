@@ -16,15 +16,7 @@ namespace Server
         
         static void Main(string[] args)
         {
-
             ServiceLoad sl = new ServiceLoad();
-
-            /*Dictionary<int, Load> dict = sl.ReadXmlFile("LoadDB.xml");
-                Console.WriteLine("Ispis" + dict.Count);
-            foreach(Load l in dict.Values)
-            {
-                Console.WriteLine(l);
-            }*/
 
             using (ServiceHost host = new ServiceHost(typeof(ServiceLoad)))
             {
@@ -33,19 +25,8 @@ namespace Server
                 Console.WriteLine("Pritisnite [Enter] za zaustavljanje servera!");
                 Console.ReadKey();
                 Console.WriteLine(sl.receivedMessage);
-
-
                 host.Close();
             }
-
-           
-
-
-
-
-
-
-
         }
     }
 }

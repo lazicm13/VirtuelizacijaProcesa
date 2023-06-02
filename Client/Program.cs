@@ -35,31 +35,21 @@ namespace Client
 
                     using (MemoryStream stream = new MemoryStream())
                     {
-                        // Write the forecast file bytes to the stream
+                        // Write the measured file bytes to the stream
                         stream.Write(forecastBytes, 0, forecastBytes.Length);
 
-                        string data = "#";
-
-                        // Convert the string to bytes using UTF-8 encoding
-                        byte[] bytes = Encoding.UTF8.GetBytes(data);
-
-                        // Write the bytes to the stream
-                        stream.Write(bytes, 0, bytes.Length);
-                        // Write the measured file bytes to the stream
                         stream.Write(measuredBytes, 0, measuredBytes.Length);
                         
-
-
                         // Set the stream position back to the beginning
                         stream.Position = 0;
 
                         if (proxy.SendFiles(stream))
                         {
-                            Console.WriteLine("Datoteke su uspešno obrađene!");
+                            Console.WriteLine("Datoteke su uspešno obradjene!");
                         }
                         else
                         {
-                            Console.WriteLine("Datoteke nisu uspešno obrađene!");
+                            Console.WriteLine("Datoteke nisu uspešno obradjene!");
                         }
                     }
                 }
